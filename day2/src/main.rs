@@ -1,9 +1,9 @@
-use std::fs::File;
-use std::io::{self, BufRead};
 use nom::branch::alt;
 use nom::character::complete::{digit1, space1};
 use nom::combinator::value;
 use nom::{bytes::complete::tag, combinator::map_res, IResult};
+use std::fs::File;
+use std::io::{self, BufRead};
 
 const INPUT_FILENAME: &str = "input.txt";
 
@@ -11,6 +11,7 @@ const INPUT_FILENAME: &str = "input.txt";
 struct Position {
     horiz: i32,
     depth: i32,
+    aim: i32,
 }
 
 impl Position {
@@ -18,20 +19,31 @@ impl Position {
         Position {
             horiz: 0,
             depth: 0,
+            aim: 0,
         }
     }
 
-    fn add_horiz(&self, amount: i32) -> Position {
+    fn with_horiz(&self, horiz: i32) -> Position {
         Position {
-            horiz: self.horiz + amount,
+            horiz,
             depth: self.depth,
+            aim: self.aim,
         }
     }
 
-    fn add_depth(&self, amount: i32) -> Position {
+    fn with_depth(&self, depth: i32) -> Position {
         Position {
             horiz: self.horiz,
-            depth: self.depth + amount,
+            depth,
+            aim: self.aim,
+        }
+    }
+
+    fn with_aim(&self, aim: i32) -> Position {
+        Position {
+            horiz: self.horiz,
+            depth: self.depth,
+            aim,
         }
     }
 }
@@ -52,9 +64,11 @@ struct Command {
 impl Command {
     fn applied_to(&self, pos: Position) -> Position {
         match self.command_type {
-            CommandType::Forward => pos.add_horiz(self.amount),
-            CommandType::Up => pos.add_depth(-self.amount),
-            CommandType::Down => pos.add_depth(self.amount),
+            CommandType::Forward => pos
+                .with_horiz(pos.horiz + self.amount)
+                .with_depth(pos.depth + pos.aim * self.amount),
+            CommandType::Up => pos.with_aim(pos.aim - self.amount),
+            CommandType::Down => pos.with_aim(pos.aim + self.amount),
         }
     }
 }
@@ -73,7 +87,10 @@ fn parse_command(input: &str) -> IResult<&str, Command> {
     let (input, amount) = map_res(digit1, |s: &str| s.parse::<i32>())(input)?;
     Ok((
         input,
-        Command { command_type, amount }
+        Command {
+            command_type,
+            amount,
+        },
     ))
 }
 
@@ -83,7 +100,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut pos = Position::new();
     for line in lines {
         let line = line?;
-        let (_, command) = parse_command(&line).map_err(|_e| io::Error::new(io::ErrorKind::Other, "Failed to parse"))?;
+        let (_, command) = parse_command(&line)
+            .map_err(|_e| io::Error::new(io::ErrorKind::Other, "Failed to parse"))?;
         pos = command.applied_to(pos);
     }
     println!("Result: {}", pos.horiz * pos.depth);
