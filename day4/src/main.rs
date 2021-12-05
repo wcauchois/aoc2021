@@ -1,4 +1,4 @@
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::fs::File;
 use std::io::{self, BufRead};
 
@@ -11,6 +11,7 @@ const BOARD_COUNT: usize = BOARD_SIZE * BOARD_SIZE;
 struct Board {
     nums: [i32; BOARD_COUNT],
     marked: RefCell<[bool; BOARD_COUNT]>,
+    frozen: Cell<bool>,
 }
 
 impl Board {
@@ -18,10 +19,14 @@ impl Board {
         Board {
             nums: [0; BOARD_COUNT],
             marked: RefCell::new([false; BOARD_COUNT]),
+            frozen: Cell::new(false),
         }
     }
 
     fn mark(&self, num: i32) {
+        if self.frozen.get() {
+            return;
+        }
         for i in 0..BOARD_COUNT {
             if self.nums[i] == num {
                 self.marked.borrow_mut()[i] = true;
@@ -41,6 +46,10 @@ impl Board {
             }
         }
         false
+    }
+
+    fn freeze(&self) {
+        self.frozen.set(true);
     }
 
     fn score(&self, called_num: i32) -> i32 {
@@ -122,14 +131,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let puzzle_input = PuzzleInput::read_from_file(INPUT_FILENAME)?;
     // println!("Puzzle input: {:#?}", puzzle_input);
 
+    let mut last_winner: Option<(&Board, i32)> = None;
     for drawn_num in puzzle_input.drawn_numbers {
         for board in &puzzle_input.boards {
             board.mark(drawn_num);
-            if board.wins() {
-                println!("Board wins! Score: {}", board.score(drawn_num));
-                return Ok(());
+            if board.wins() && !board.frozen.get() {
+                board.freeze();
+                last_winner = Some((board, drawn_num));
             }
         }
+    }
+
+    if let Some((board, drawn_num)) = last_winner {
+        println!("Board is: {:?}", board);
+        println!("Score: {}", board.score(drawn_num));
     }
 
     Ok(())
